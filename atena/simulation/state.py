@@ -128,6 +128,9 @@ class EnvStateTuple(namedtuple('EnvStateTuple', ["filtering", "grouping", "aggre
     def __getitem__(self, attr):
         return GetItemByStr.__getitem__(self, attr)
 
+    def is_grouped(self):
+        return self.grouping
+
     @classmethod
     def _create_state_tuple(cls, filtering, grouping, aggregations):
         return cls(

@@ -140,7 +140,7 @@ class AbstractMetric(ABC):
 
 class DisplaysTreeBleuMetric(AbstractMetric):
     def __init__(self, bleu_n: int, eval_instances: List[EvalInstance]):
-        super().__init__(metric_name=f'T-BLUE-{bleu_n}', eval_instances=eval_instances)
+        super().__init__(metric_name=f'T-BLEU-{bleu_n}', eval_instances=eval_instances)
         self.bleu_n = bleu_n
 
     def compute(self) -> float:
@@ -204,10 +204,12 @@ def get_all_eval_metrics(eval_instances: List[EvalInstance]) -> List[AbstractMet
     return eval_metrics
 
 
-def get_dataframe_all_eval_metrics(eval_instances: List[EvalInstance]) -> pd.DataFrame:
-    eval_metrics = get_all_eval_metrics(eval_instances)
-
+def get_dataframe_for_eval_metrics(eval_metrics: List[AbstractMetric]) -> pd.DataFrame:
     columns = [eval_metric.name for eval_metric in eval_metrics]
     eval_scores = [[eval_metric.compute() for eval_metric in eval_metrics]]
 
     return pd.DataFrame(eval_scores, columns=columns)
+
+
+def get_dataframe_all_eval_metrics(eval_instances: List[EvalInstance]) -> pd.DataFrame:
+    return get_dataframe_for_eval_metrics(get_all_eval_metrics(eval_instances))

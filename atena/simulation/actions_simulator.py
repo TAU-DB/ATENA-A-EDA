@@ -1,5 +1,7 @@
 from typing import List
 
+import pandas as pd
+
 from atena.simulation.actions import (
     AbstractAction,
     ActionType,
@@ -13,8 +15,30 @@ from atena.simulation.dataset import (
     DatasetName,
 )
 from atena.simulation.display import DisplayCalculator
-from atena.simulation.state import EnvStateTuple, FilteringTuple, AggregationTuple
+from atena.simulation.state import EnvStateTuple, FilteringTuple, AggregationTuple, DisplayTuple
 from atena.simulation.utils import random_action_generator
+
+
+class ActionExecutionResult(object):
+    def __init__(self,
+                 action: AbstractAction,
+                 display: DisplayTuple,
+                 filtered_df: pd.DataFrame,
+                 aggregated_df: pd.DataFrame,
+                 state: EnvStateTuple
+                 ):
+
+        self.action = action
+        self.display = display
+        self._filtered_df = filtered_df
+        self._aggregated_df = aggregated_df
+        self.state = state
+
+    @property
+    def df(self):
+        if self.state.is_grouped():
+            return self._aggregated_df
+        return self._filtered_df
 
 
 class SimulationState(object):
@@ -39,7 +63,6 @@ class ActionsSimulator(object):
         self.dataset = dataset
         self.display_calculator = DisplayCalculator(self.dataset)
         self.simulation_state = SimulationState(self.display_calculator)
-        self.is_reset = True
 
     def reset(self):
         """
@@ -50,21 +73,23 @@ class ActionsSimulator(object):
         self.display_calculator = DisplayCalculator(self.dataset)
         self.simulation_state = SimulationState(self.display_calculator)
 
-    def run_actions(self, actions_lst: List[AbstractAction]):
-        assert self.is_reset, "Oh no, you should first reset() the simulator!"
+    def run_actions(self, actions_lst: List[AbstractAction]) -> List[ActionExecutionResult]:
+        self.reset()
         steps_info = []
         for action in actions_lst:
             step_info = self.execute_action(action)
             steps_info.append(step_info)
 
-        self.is_reset = False
         return steps_info
 
-    def execute_action(self, action: AbstractAction):
+    def execute_action(self, action: AbstractAction) -> ActionExecutionResult:
         """This function processes an action:
          (1) Executes the action: It computes a rolling "state" dictionary, comprising filtering,grouping and aggregations
          (2) Calculates the display vector and new DataFrames
          (3) Update the history lists
+
+         Prefer using the function run_actions and not this function directly since this function does not reset
+         the state of the environment. Hence, it should be used with great care.
         """
 
         # (1) Executing an action by incrementing the state dictionary:
@@ -111,11 +136,13 @@ class ActionsSimulator(object):
         self.simulation_state.states_history.append(new_state)
         self.simulation_state.displays_history.append(display)
 
-        return {"action": action,
-                "display": display,
-                "raw_display": dfs,
-                "state": new_state,
-                }
+        return ActionExecutionResult(
+            action=action,
+            display=display,
+            filtered_df=dfs[0],
+            aggregated_df=dfs[1],
+            state=new_state
+        )
 
     def run_n_random_actions(self, n: int):
         actions_lst = [random_action_generator(self.dataset) for _ in range(n)]
