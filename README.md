@@ -15,8 +15,8 @@ The gold-standard EDA sessions comprise FILTER and GROUP-BY operations only.
 The A-EDA benchmark draws similar lines to machine-translation and caption-generation benchmarks.
 We have 5 different supported metrics:
 
-####1. Precision:
-This measure compares consider the EDA notebooks as sets of distinct views (ignoring their order), counting a "hit" if a view occurs in one of the gold-standard notebooks and a "miss" otherwise. It is calculated by $'\frac{\text{hits}}{\text{hits+misses}}'$
+#### 1. Precision:
+This measure compares consider the EDA notebooks as sets of distinct views (ignoring their order), counting a "hit" if a view occurs in one of the gold-standard notebooks and a "miss" otherwise. It is calculated by $`\frac{\text{hits}}{\text{hits+misses}}`$
 
 
 
