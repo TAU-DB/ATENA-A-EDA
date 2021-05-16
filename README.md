@@ -10,11 +10,11 @@ As a first attempt (to our knowledge) to tackle this issue, we developed ATENA -
 ## The code:
 We provide both a basic implementation of our ATENA framework, as well as the A-EDA benchmark as used in our experiments described in the paper
 
-### 1. ATENA Basic Implementaiton
+### 1. [ATENA Basic Implementaiton](atena-basic)
 Our implementation is developed in Python 3.6 using the ChainerRL library for its underlying Deep Reinforcement Learning model. 
 The implementation currently works with our two schemas used in the paper: cyber-security network analysis schema, and the flights schema. 
 
-### 2. A-EDA Benchmark
+### 2. [A-EDA Benchmark](benchmark)
 The benchmark, as used in our experiments, includes 8 datasets from two different schemas: flight-delays and cyber-security.
 Each dataset is accompanied with a "gold-standard" set of EDA sessions, made by expert data scientists in order to showcase the dataset highlights in a coherent, easy-to-follow mannar.
 We additionally provide implementations for all of our evaluation metrics. 
