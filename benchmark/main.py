@@ -11,8 +11,6 @@ from atena.simulation.dataset import (
     Dataset,
     DatasetMeta,
     SchemaName,
-    CyberDatasetName,
-    FlightsDatasetName,
 )
 from atena.simulation.utils import random_action_generator
 
