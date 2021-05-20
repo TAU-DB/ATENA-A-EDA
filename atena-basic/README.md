@@ -22,6 +22,17 @@ $ python test.py --load results/20210101T123456.718192/10000_finish --env ATENAc
 ``` 
 The output will be an auto-generated EDA session.
 
+## Adding New Scheme
+Adding new scheme to ATENA is a simple process:
+1. Upload one or multiple datasets in tsv format to the repository
+2. <p>Create two new files:<br/>
+    <code>columns_data.py</code> - Holds basic definitions about the data structure.<br/>
+    <code>scheme_helpers.py</code> - The logic of parsing the datasets. Probably has only a few changes from other scheme helpers.
+    </p>
+3. Add option to configure and apply it in `arguments.py` and `global_env_prop.py` 
+
+You can follow an example pull request to this repository called "Support Netflix Scheme".
+The pull request also shows how to support a new scheme in benchmark.
  
 
 
