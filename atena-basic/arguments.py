@@ -23,6 +23,7 @@ class SchemaName(Enum):
     BIG_FLIGHTS = 'BIG_FLIGHTS'
     WIDE_FLIGHTS = 'WIDE_FLIGHTS'
     WIDE12_FLIGHTS = 'WIDE12_FLIGHTS'
+    NETFLIX = 'NETFLIX'
 
 
 class FilterTermsBinsSizes(Enum):

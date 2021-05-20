@@ -12,6 +12,7 @@ from gym_atena.lib.networking_helpers import create_networking_env_properties
 from gym_atena.lib.big_flights_helpers import create_big_flights_env_properties
 from gym_atena.lib.wide_flights_helpers import create_wide_flights_env_properties
 from gym_atena.lib.wide12_flights_helpers import create_wide12_flights_env_properties
+from gym_atena.lib.netflix_helpers import create_netflix_env_properties
 
 global_env_prop = None
 
@@ -34,6 +35,8 @@ def update_global_env_prop_from_cfg():
         global_env_prop = create_wide_flights_env_properties()
     elif schema_name is SchemaName.WIDE12_FLIGHTS:
         global_env_prop = create_wide12_flights_env_properties()
+    elif schema_name is SchemaName.NETFLIX:
+        global_env_prop = create_netflix_env_properties()
     else:
         raise NotImplementedError
     if cfg.dataset_number is not None and cfg.outdir:
