@@ -19,12 +19,17 @@ class FlightsDatasetName(Enum):
     DATASET4 = 4
 
 
-DatasetName = NewType('DatasetName', Union[CyberDatasetName, FlightsDatasetName])
+class NetflixDatasetName(Enum):
+    DATASET1 = 1
+
+
+DatasetName = NewType('DatasetName', Union[CyberDatasetName, FlightsDatasetName, NetflixDatasetName])
 
 
 class SchemaName(Enum):
     CYBER = 'cyber'
     FLIGHTS = 'flights'
+    NETFLIX = 'netflix'
 
     @property
     def dataset_names(self) -> DatasetName:
@@ -32,6 +37,8 @@ class SchemaName(Enum):
             return CyberDatasetName
         elif self is SchemaName.FLIGHTS:
             return FlightsDatasetName
+        elif self is SchemaName.NETFLIX:
+            return NetflixDatasetName
         else:
             raise NotImplementedError
 
@@ -45,6 +52,8 @@ class DatasetMeta(object):
             assert isinstance(dataset_name, CyberDatasetName)
         elif schema is SchemaName.FLIGHTS:
             assert isinstance(dataset_name, FlightsDatasetName)
+        elif schema is SchemaName.NETFLIX:
+            assert isinstance(dataset_name, NetflixDatasetName)
         else:
             raise NotImplementedError
         self.dataset_name = dataset_name
@@ -74,6 +83,9 @@ class Dataset(object):
                     'delay_reason', 'departure_delay',
                     'scheduled_trip_time',
                     'scheduled_departure', 'scheduled_arrival', 'day_of_week', 'day_of_year']
+        elif self.dataset_meta.schema is SchemaName.NETFLIX:
+            return ['show_id', 'type', 'title', 'director', 'cast', 'country', 'date_added', 'release_year', 'rating',
+                    'duration', 'listed_in', 'description']
         else:
             raise NotImplementedError
 
@@ -83,6 +95,8 @@ class Dataset(object):
             return ['packet_number']
         elif self.dataset_meta.schema is SchemaName.FLIGHTS:
             return ['flight_id']
+        elif self.dataset_meta.schema is SchemaName.NETFLIX:
+            return ['show_id', 'release_year']
         else:
             raise NotImplementedError
 
@@ -92,5 +106,7 @@ class Dataset(object):
             return ['packet_number', 'length']
         elif self.dataset_meta.schema is SchemaName.FLIGHTS:
             return ['flight_id']
+        elif self.dataset_meta.schema is SchemaName.NETFLIX:
+            return ['show_id']
         else:
             raise NotImplementedError
