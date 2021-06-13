@@ -33,10 +33,9 @@ import gym_atena.global_env_prop as gep
 
 StepInfo = namedtuple('StepInfo', 'continuous_action reward info')
 
-model_dir_path = '/home/oribarel/GIT/ATENA/results/TovaFlightsSoftmax20191015T225833.012294/best'
-command_args = '--algo chainerrl_ppo --cache-dfs-size 100 --cache-tokenization-size 50 --cache-distances-size 100 --episode-length 12 --stack-obs-num 3 --arch FFParamSoftmax'
-
-results_path = '/home/oribarel/GIT/ATENA/results/analyzer'
+model_dir_path = None
+command_args = None
+results_path = None
 
 
 # the serial number of the plot for the current dataset plotted

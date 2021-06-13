@@ -29,9 +29,6 @@ from os import makedirs
 
 from gym_atena.envs.atena_env_cont import ATENAEnvCont
 import gym_atena.lib.helpers as ATENAUtils
-from humanity_reward import (
-    eval_agent_humanity
-)
 
 from tensorboard import summary
 from tensorboardX import SummaryWriter
@@ -329,7 +326,6 @@ def train_agent_batch(agent, env, steps, outdir, log_interval=None,
                       step_offset=0, evaluator=None, successful_score=None,
                       step_hooks=[], return_window_size=100, logger=None,
                       use_humans_reward=False,
-                      human_displays_actions_clusters=None,
                       humans_reward_interval=2048):
     """Train an agent in a batch environment.
 
@@ -351,7 +347,6 @@ def train_agent_batch(agent, env, steps, outdir, log_interval=None,
             See chainerrl.experiments.hooks.
         logger (logging.Logger): Logger used in this function.
         use_humans_reward: Boolean for whether or not to use humans sessions reward
-        human_displays_actions_clusters: A dictionary with humans obs-act_lst pairs
         humans_reward_interval: Number of episodes between reevaluation of agent performance
     """
     env_prop = update_global_env_prop_from_cfg()
@@ -360,27 +355,9 @@ def train_agent_batch(agent, env, steps, outdir, log_interval=None,
     agent_humanity_rate = -1
     log_idx = 0
     logger = logger or logging.getLogger(__name__)
-    humanity_factor_logger = logging.getLogger('humanity_factor')
 
     arch = ArchName(cfg.arch)
 
-    human_obss = [np.array(tuple_obs, dtype=np.float32) for tuple_obs in human_displays_actions_clusters.keys()]
-
-    # a dictionary that stores for each human observation the number of times
-    # the agent encountered this observation
-    human_obss_cntr = {tuple_obs: 0 for tuple_obs in human_displays_actions_clusters.keys()}
-
-    # a dictionary that stores for each human observation a tuple
-    # (obs_success_rate, obs_occurrences) s.t. obs_success_rate is the success rate
-    # of the agent on that obs and obs_occurrences is the number of times the agent
-    # was presented with this observation
-    # Note: this is relevant only for the agent as a human classifier mode
-    human_obs_classification_stat = None
-
-    # a factor to the reward of the
-    # agent capability to behave like a human (a number with minimum value of 1.0)
-    agent_humanity_factor = 1.0 * cfg.humanity_coeff
-    prev_human_eval_num_of_episodes = -1
 
     recent_returns = deque(maxlen=return_window_size)
     recent_returns_without_humanity = deque(maxlen=return_window_size)
@@ -414,56 +391,6 @@ def train_agent_batch(agent, env, steps, outdir, log_interval=None,
 
     try:
         while t < steps:
-            # reevaluate human reward
-            num_of_episodes = np.sum(episode_idx)
-            if (not cfg.obs_with_step_num and cfg.stack_obs_num == 1 and
-                    num_of_episodes > prev_human_eval_num_of_episodes and
-                    num_of_episodes % humans_reward_interval < num_envs):
-                prev_human_eval_num_of_episodes = num_of_episodes
-
-                human_obss_copy = deepcopy(human_obss)
-
-                agent_actions = []
-                pad_length = 0
-
-                while human_obss_copy:
-                    batch_eval_obss = human_obss_copy[:num_envs]
-
-                    # pad batch_eval_obss to be a multiple of num_envs
-                    pad_length = num_envs - len(batch_eval_obss)
-                    for i in range(pad_length):
-                        batch_eval_obss.append(np.array(list(human_displays_actions_clusters.keys())[0],
-                                                        dtype=np.float32))
-
-                    # get agent actions for observations
-                    agent_actions_for_batch_obs = batch_act_with_mean(agent, batch_eval_obss)
-                    agent_actions.extend(agent_actions_for_batch_obs)
-
-                    # remove already evaluated obs
-                    human_obss_copy = human_obss_copy[num_envs:]
-
-                # evaluate agent actions
-                agent_humanity_rate, agent_humanity_info = eval_agent_humanity(
-                    human_displays_actions_clusters,
-                    human_obss, agent_actions, pad_length, env_prop)
-                # agent_humanity_factor = (1.0 + agent_humanity_rate * 1.0) ** 10
-                agent_humanity_factor = (1.0 + agent_humanity_rate * 1.0) ** 10 / 10 * cfg.humanity_coeff
-
-                # log agent humanity rate and factor
-                print("agent humanity rate: %f, humanity_factor: %f" % (agent_humanity_rate,
-                                                                        agent_humanity_factor))
-                humanity_factor_logger.info("agent humanity rate: %f, humanity_factor: %f" % (
-                    agent_humanity_rate, agent_humanity_factor))
-                humanity_factor_logger.info("agent humanity info: %s" % (
-                    {key: val for key, val in agent_humanity_info.items()
-                     if key in ['success_count_per_action_type', 'failure_count_per_action_type']}
-                ))
-
-            # add observation to humans_obss counter if necessary
-            for obs in obss:
-                obs = tuple(obs)
-                if obs in human_obss_cntr:
-                    human_obss_cntr[obs] += 1
 
             # a_t
             #actions = agent.batch_act_and_train(obss)
@@ -496,22 +423,6 @@ def train_agent_batch(agent, env, steps, outdir, log_interval=None,
                 action_types.append(action_type)
 
             episode_r_without_humanity += rs
-
-            """if use_humans_reward:
-                new_rs = np.zeros(num_envs, dtype=np.float64)
-                rs = new_rs + rs
-
-                # ignore positive reward that is not origined in humanity reward
-                # rs[rs > 0] = 0
-
-                # add extra reward if human obs seen except for bad states (empty displays)
-                for idx, obs in enumerate(obss):
-                    obs = tuple(obs)
-                    if obs in human_obss_cntr and not (ATENAEnvCont._is_empty_display(obs) or
-                                                       ATENAEnvCont._is_empty_groupings(obs)):
-                        rs[idx] += cfg.humanity_coeff
-
-                # rs = rs + agent_humanity_factor"""
 
             # save rewards for logging purposes
             for i, info in enumerate(infos):
@@ -597,12 +508,6 @@ def train_agent_batch(agent, env, steps, outdir, log_interval=None,
                 # summary_writer.add_scalar('avg_second_highest_act_prob', avg_k_highest_act_probs[1], t)
                 summary_writer.add_scalar('avg_entropy', np.mean(entropy_values), t)
 
-                # log humanity_obs_cntr
-                to_print_human_obss_cntr = [val for key, val in human_obss_cntr.items() if val > 0]
-                # print(to_print_human_obss_cntr)
-                # humanity_factor_logger.info('obss: {}'.format([tuple(obs) for obs in obss]))
-                humanity_factor_logger.info('to_print_human_obss_cntr: {}'.format(to_print_human_obss_cntr))
-
             if evaluator:
                 if evaluator.evaluate_if_necessary(
                         t=t, episodes=np.sum(episode_idx)):
@@ -617,10 +522,6 @@ def train_agent_batch(agent, env, steps, outdir, log_interval=None,
             actions_cntr_path = os.path.join(outdir, 'actions_cntr.pickle')
             with open(actions_cntr_path, 'wb') as handle:
                 pickle.dump(actions_cntr, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-        # log the humans_obs counter
-        humanity_factor_logger.info('humanity_obs counter: {}'.format(human_obss_cntr))
-        humanity_factor_logger.info('humanity_obs counter values: {}'.format(human_obss_cntr.values()))
 
         # Save the current model before being killed
         save_agent(agent, t, outdir, logger, suffix='_except')
@@ -643,10 +544,6 @@ def train_agent_batch(agent, env, steps, outdir, log_interval=None,
             actions_cntr_path = os.path.join(outdir, 'actions_cntr.pickle')
             with open(actions_cntr_path, 'wb') as handle:
                 pickle.dump(actions_cntr, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-        # log the humans_obs counter
-        humanity_factor_logger.info('humanity_obs counter: {}'.format(human_obss_cntr))
-        humanity_factor_logger.info('humanity_obs counter values: {}'.format(human_obss_cntr.values()))
 
         # Save the final model
         save_agent(agent, t, outdir, logger, suffix='_finish')
@@ -676,7 +573,6 @@ def train_agent_batch_with_evaluation(agent,
                                       save_best_so_far_agent=True,
                                       logger=None,
                                       use_humans_reward=False,
-                                      human_displays_actions_clusters=None,
                                       humans_reward_interval=2048
                                       ):
     """Train an agent while regularly evaluating it.
@@ -706,7 +602,6 @@ def train_agent_batch_with_evaluation(agent,
             the best-so-far score, the current agent is saved.
         logger (logging.Logger): Logger used in this function.
         use_humans_reward: Boolean for whether or not to use humans sessions reward
-        human_displays_actions_clusters: A dictionary with humans obs-act_lst pairs
         humans_reward_interval: Number of episodes between reevaluation of agent performance
     """
     global summary_writer
@@ -746,7 +641,6 @@ def train_agent_batch_with_evaluation(agent,
         step_hooks=step_hooks,
         logger=logger,
         use_humans_reward=use_humans_reward,
-        human_displays_actions_clusters=human_displays_actions_clusters,
         humans_reward_interval=humans_reward_interval)
 
     summary_writer.close()

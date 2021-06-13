@@ -1,5 +1,5 @@
 #from collections import namedtuple
-from Utilities.Utility_Functions import initialize_agent_and_env, load_human_session_actions_clusters
+from Utilities.Utility_Functions import initialize_agent_and_env
 from arguments import AlgoName
 
 from train_agent_chainerrl import train_agent_with_evaluation, train_agent_batch_with_evaluation
@@ -50,9 +50,6 @@ def train_or_evaluate(
         clip_eps_decay_hook = experiments.LinearInterpolationHook(
             args.steps, 0.2, 0, clip_eps_setter)
 
-        # load human sessions action clusters
-        human_displays_actions_clusters = load_human_session_actions_clusters()
-
         train_agent_batch_with_evaluation(
             agent=agent,
             env=make_batch_env(args, False),
@@ -70,7 +67,6 @@ def train_or_evaluate(
                 clip_eps_decay_hook,
             ],
             use_humans_reward=args.use_humans_reward,
-            human_displays_actions_clusters=human_displays_actions_clusters,
             humans_reward_interval=args.humans_reward_interval,
             step_offset=args.offset_steps,
         )
