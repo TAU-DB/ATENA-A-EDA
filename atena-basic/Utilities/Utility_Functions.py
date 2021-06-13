@@ -136,56 +136,6 @@ def initialize_agent_and_env(is_test=False):
     return agent, env, args
 
 
-def load_human_session_actions_clusters():
-    """
-    Load observation-actions_lst pairs of human sessions from a .pickle file
-    Note: filters "easy" actions
-
-    :return: a dict of observation-actions_lst pairs
-    """
-    result_human_displays_actions_clusters_obs_based = dict()
-
-    # load human sessions actions clusters from pickle(deserialize)
-    with open('human_actions_clusters.pickle', 'rb') as handle:
-        # key is the current observation (a tuple of length observation vector)
-        # value is a list of action vectors taken for this observation
-        human_displays_actions_clusters_obs_based = pickle.load(handle)
-
-    # leave only difficult observations
-    # with open('failures_obs.pickle', 'rb') as handle:
-    #     failures_obs = pickle.load(handle)
-    #     human_displays_actions_clusters_obs_based = {key: val for key, val in
-    #     human_displays_actions_clusters_obs_based.items() if key
-    #                                    in failures_obs}
-    for obs, action_lst in human_displays_actions_clusters_obs_based.items():
-        # remove `back` actions if there are other actions
-        is_back_in_act_lst = [act[0] == 0 for act in action_lst]
-        if not all(is_back_in_act_lst):
-            action_lst = [act for i, act in enumerate(action_lst) if not is_back_in_act_lst[i]]
-        result_human_displays_actions_clusters_obs_based[obs] = action_lst
-
-        # remove all observations that have `back` as the only action
-        if all(is_back_in_act_lst):
-            result_human_displays_actions_clusters_obs_based.pop(obs)
-
-    if cfg.no_back:
-        result_human_displays_actions_clusters_obs_based_copy = deepcopy(result_human_displays_actions_clusters_obs_based)
-        result_human_displays_actions_clusters_obs_based = dict()
-        for obs, action_lst in result_human_displays_actions_clusters_obs_based_copy.items():
-            new_action_lst = []
-            for act in action_lst:
-                if act[0] == 0:
-                    raise ValueError("--no-back command-line argument is used but human sessions contains back actions")
-                elif act[0] == 1:  # if filter
-                    act[0] = 0
-                elif act[0] == 2:  # if group
-                    act[0] = 1
-                new_action_lst.append(act)
-            result_human_displays_actions_clusters_obs_based[obs] = new_action_lst
-
-    return result_human_displays_actions_clusters_obs_based
-
-
 def setup_logger(name, log_file, level=logging.INFO):
     """Function setup as many loggers as you want"""
     # https://stackoverflow.com/questions/11232230/logging-to-two-files-with-different-settings

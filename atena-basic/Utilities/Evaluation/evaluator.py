@@ -143,9 +143,6 @@ class EvalMethod(Enum):
     INTER_MOST_PROBABLE = 'inter_most_probable'  # The most probable policy of an agent with interestingness component only
     SOFTMAX_MOST_PROBABLE = 'softmax_most_probable'  # The most probable policy of an agent with softmax architecture and binning for filter terms
     SOFTMAX_LIST_MOST_PROBABLE = 'softmax_list_most_probable'  # The most probable policy of an agent with softmax architecture and list of filter terms
-    HUMAN = 'expert'  # Note: this is not the expert users that wrote the reference sessions
-    REACT = 'human + REACT'
-    WITHOUT_REACT = 'human without REACT'
 
 
 class EvalMetric(Enum):
@@ -334,62 +331,9 @@ class Evaluator(object):
         # 3. Create references actions
         self.refs_actions = self.get_references_actions(references_path)
 
-        # 4. Create human sessions actions
-        self.num_human_sessions_per_dataset = 6  # For networking schema datasets
-        self._human_actions = None
-
-        # 5. Create REACT human sessions actions
-        self.num_react_sessions_per_dataset = 4  # only for datasets 0 and 3 (1, 2 are missing)
-        self._react_actions = None
-
-        # 6. Create REACT human sessions actions WITHOUT REACT
-        self._without_react_actions = None
-
         """
         Create Tokens for Actions
         """
-
-    @property
-    def human_actions(self):
-        if self._human_actions is None:
-            if self.schema_name is SchemaName.NETWORKING:
-                result = [[] for _ in range(self.D)]
-                for dataset_num in range(self.D):
-                    for sol_idx_for_dataset in range(self.num_human_sessions_per_dataset):
-                        acts = get_all_human_sessions_sol_actions_lsts_for_dataset_number(dataset_num)[sol_idx_for_dataset]
-                        result[dataset_num].append(acts)
-                self._human_actions = result
-            elif self.schema_name is SchemaName.FLIGHTS:
-                self._human_actions = self.get_references_actions('eval_sessions/human/flights')
-                self.num_human_sessions_per_dataset = len(self._human_actions[0])
-                assert (all(len(self._human_actions[i]) == len(self._human_actions[0]) for i in range(
-                    len(self._human_actions))))
-            else:
-                raise NotImplementedError
-        return self._human_actions
-
-    def _get_with_or_without_react_actions(self, with_react=True):
-
-        result = [[] for _ in range(self.D)]
-        for dataset_num in [0, 3]:
-            for sol_idx_for_dataset in range(self.num_react_sessions_per_dataset):
-                acts = get_all_human_sessions_with_or_without_react_first_usage_actions_lsts_for_dataset_number(
-                    dataset_num, with_react=with_react)[
-                    sol_idx_for_dataset]
-                result[dataset_num].append(acts)
-        return result
-
-    @property
-    def react_actions(self):
-        if self._react_actions is None:
-            self._react_actions = self._get_with_or_without_react_actions(with_react=True)
-        return self._react_actions
-
-    @property
-    def without_react_actions(self):
-        if self._without_react_actions is None:
-            self._without_react_actions = self._get_with_or_without_react_actions(with_react=False)
-        return self._without_react_actions
 
     @staticmethod
     def set_framework_cfg_to_human():
@@ -550,23 +494,15 @@ class Evaluator(object):
         # Calculate tree sentence BLEU for each candidate individually
         sentence_bleus = [dict() for _ in range(self.D)]
         for dataset_num in range(self.D):
-            if eval_method is EvalMethod.REACT and dataset_num in [0, 3]:
-                if dataset_num == 0:
-                    refs, cand = references[0], candidates[0]
-                elif dataset_num == 3:
-                    refs, cand = references[1], candidates[1]
-            elif eval_method is None:
+            if eval_method is None:
                 refs, cand = references[dataset_num], candidates[dataset_num]
             for bleu_n in range(1, 4):
-                if eval_method is EvalMethod.REACT and not dataset_num in [0, 3]:
-                    sentence_bleus[dataset_num][bleu_n] = math.nan
-                else:
-                    if not is_gleu:
-                        sentence_bleus[dataset_num][bleu_n] = tree_sentence_bleu_n(
-                            refs, cand, back_token='[back]', n=bleu_n, smoothing_function=chencherry.method1)
-                    elif is_gleu:
-                        sentence_bleus[dataset_num][bleu_n] = tree_sentence_gleu_n(
-                            refs, cand, back_token='[back]', n=bleu_n)
+                if not is_gleu:
+                    sentence_bleus[dataset_num][bleu_n] = tree_sentence_bleu_n(
+                        refs, cand, back_token='[back]', n=bleu_n, smoothing_function=chencherry.method1)
+                elif is_gleu:
+                    sentence_bleus[dataset_num][bleu_n] = tree_sentence_gleu_n(
+                        refs, cand, back_token='[back]', n=bleu_n)
 
         result = {
             'corpus_tree_bleu1': corpus_bleus[0],
@@ -606,19 +542,11 @@ class Evaluator(object):
         metric_val_per_dataset = [0 for _ in range(self.D)]
         values_to_avg = []
         for dataset_num in range(self.D):
-            if eval_method is EvalMethod.REACT and dataset_num in [0, 3]:
-                if dataset_num == 0:
-                    refs, cand = references[0], candidates[0]
-                elif dataset_num == 3:
-                    refs, cand = references[1], candidates[1]
-            elif eval_method is None:
+            if eval_method is None:
                 refs, cand = references[dataset_num], candidates[dataset_num]
-            if eval_method is EvalMethod.REACT and not dataset_num in [0, 3]:
-                metric_val_per_dataset[dataset_num] = math.nan
-            else:
-                metric_val_per_dataset[dataset_num] = Evaluator.calculate_eval_metric(
-                    refs, cand, eval_metric=eval_metric)
-                values_to_avg.append(metric_val_per_dataset[dataset_num])
+            metric_val_per_dataset[dataset_num] = Evaluator.calculate_eval_metric(
+                refs, cand, eval_metric=eval_metric)
+            values_to_avg.append(metric_val_per_dataset[dataset_num])
 
         result = {
             'avg_metric_vals': np.mean(values_to_avg),
@@ -631,24 +559,6 @@ class Evaluator(object):
         actions = []
         for dataset_number in range(self.D):
             actions.append(self.agent_k_random_actions[dataset_number][i])
-
-        return actions
-
-    def get_ith_human_actions(self, i):
-        actions = []
-        for dataset_number in range(self.D):
-            actions.append(self.human_actions[dataset_number][i])
-
-        return actions
-
-    def get_ith_react_actions(self, i, with_react=True):
-        actions = []
-        if with_react:
-            actions_lst = self.react_actions
-        else:
-            actions_lst = self.without_react_actions
-        for dataset_number in [0, 3]:
-            actions.append(actions_lst[dataset_number][i])
 
         return actions
 
@@ -700,8 +610,7 @@ class Evaluator(object):
                             EvalMethod.INTER_MOST_PROBABLE,
                             EvalMethod.SOFTMAX_MOST_PROBABLE,
                             EvalMethod.SOFTMAX_LIST_MOST_PROBABLE,
-                            EvalMethod.GREEDY, EvalMethod.INTERESTINGNESS_GREEDY, EvalMethod.HUMAN,
-                        EvalMethod.REACT, EvalMethod.WITHOUT_REACT
+                            EvalMethod.GREEDY, EvalMethod.INTERESTINGNESS_GREEDY
                         ]
         elif schema_name is SchemaName.FLIGHTS:
             eval_methods = [EvalMethod.MOST_PROBABLE,
@@ -709,7 +618,7 @@ class Evaluator(object):
                             EvalMethod.INTER_MOST_PROBABLE,
                             EvalMethod.SOFTMAX_MOST_PROBABLE,
                             EvalMethod.SOFTMAX_LIST_MOST_PROBABLE,
-                            EvalMethod.GREEDY, EvalMethod.INTERESTINGNESS_GREEDY, EvalMethod.HUMAN
+                            EvalMethod.GREEDY, EvalMethod.INTERESTINGNESS_GREEDY
                             ]
         else:
             raise NotImplementedError
@@ -881,71 +790,6 @@ class Evaluator(object):
 
         return result
 
-    @lru_cache()
-    def displays_tree_bleu_human(self, is_gleu=False):
-        """
-
-        Returns: average of scores for each dataset
-
-        """
-
-        tree_bleus = defaultdict(list)
-
-        if self.schema_name is SchemaName.NETWORKING:
-            for i in range(self.num_human_sessions_per_dataset):
-                cands = self.get_ith_human_actions(i)
-                for key, val in self.calculate_tree_bleu_for_displays(
-                        self.refs_actions, cands,
-                        compressed_cand=False,
-                        filter_by_field_cand=False,
-                        continuous_filter_term_cand=False,
-                        is_gleu=is_gleu
-                ).items():
-                    tree_bleus[key].append(val)
-        elif self.schema_name is SchemaName.FLIGHTS:
-            # function call just to fill in the human_actions property
-            self.get_ith_human_actions(0)
-
-            for i in range(self.num_human_sessions_per_dataset):
-                cands = self.get_ith_human_actions(i)
-                for key, val in self.calculate_tree_bleu_for_displays(self.refs_actions, cands, is_gleu=is_gleu).items():
-                    tree_bleus[key].append(val)
-        else:
-            raise NotImplementedError
-
-        # Calculate average
-        result = self.calculate_avg_tree_bleus(tree_bleus)
-
-        return result
-
-    @lru_cache(maxsize=1)
-    def displays_tree_bleu_react(self, is_gleu=False, with_react=True):
-        """
-
-        Returns: average of scores for each dataset
-
-        """
-
-        tree_bleus = defaultdict(list)
-
-        refs = [self.refs_actions[idx] for idx in [0, 3]]
-        for i in range(self.num_react_sessions_per_dataset):
-            cands = self.get_ith_react_actions(i, with_react=with_react)
-            for key, val in self.calculate_tree_bleu_for_displays(
-                    refs, cands,
-                    compressed_cand=False,
-                    filter_by_field_cand=False,
-                    continuous_filter_term_cand=False,
-                    eval_method=EvalMethod.REACT,
-                    is_gleu=is_gleu
-            ).items():
-                tree_bleus[key].append(val)
-
-        # Calculate average
-        result = self.calculate_avg_tree_bleus(tree_bleus)
-
-        return result
-
     def calculate_avg_tree_bleus(self, tree_bleus):
         result = dict()
         # Corpus
@@ -993,12 +837,6 @@ class Evaluator(object):
             cands = self.inter_greedy_actions
         elif eval_method is EvalMethod.K_RANDOM:
             return self.displays_tree_bleu_agent_k_random(is_gleu=is_gleu)
-        elif eval_method is EvalMethod.HUMAN:
-            return self.displays_tree_bleu_human(is_gleu=is_gleu)
-        elif eval_method is EvalMethod.REACT:
-            return self.displays_tree_bleu_react(is_gleu=is_gleu, with_react=True)
-        elif eval_method is EvalMethod.WITHOUT_REACT:
-            return self.displays_tree_bleu_react(is_gleu=is_gleu, with_react=False)
         else:
             raise NotImplementedError
 
@@ -1017,34 +855,6 @@ class Evaluator(object):
         all_bleus = self.displays_tree_bleu(eval_method, is_gleu=is_gleu)
         return all_bleus[bleu_corpus_str]
 
-    # def get_displays_sentence_tree_bleus(self, eval_method, dataset_num):
-    #     if eval_method in [EvalMethod.RANDOM, EvalMethod.MAX_K_RANDOM, EvalMethod.MOST_PROBABLE]:
-    #         tree_bleus = self.displays_tree_bleu(eval_method)
-    #     elif eval_method is EvalMethod.K_RANDOM:
-    #         tree_bleus = self.displays_tree_bleu_agent_k_random()
-    #     elif eval_method is EvalMethod.HUMAN:
-    #         tree_bleus = self.displays_tree_bleu_human()
-    #     elif eval_method is EvalMethod.REACT:
-    #         tree_bleus = self.displays_tree_bleu_react(with_react=True)
-    #     elif eval_method is EvalMethod.WITHOUT_REACT:
-    #         tree_bleus = self.displays_tree_bleu_react(with_react=False)
-    #     else:
-    #         raise NotImplementedError
-    #
-    #     dataset_sentence_bleus = tree_bleus['sentence_bleus'][dataset_num]
-    #
-    #     return dataset_sentence_bleus
-
-    # def display_displays_sentence_tree_bleus(self, eval_method, dataset_num):
-    #     sentence_bleus = self.get_displays_sentence_tree_bleus(eval_method, dataset_num)
-    #
-    #     refs_actions = self.get_actions_for_eval_method(EvalMethod.REFERENCE)
-    #     cand_actions = self.get_actions_for_eval_method(eval_method)
-    #     refs, cands = get_refs_and_cands_tokens_from_actions(refs_actions, cand_actions)
-    #     self.display_ref_cand_comparison(refs[dataset_num], cands[dataset_num])
-    #
-    #     for key, val in sorted(sentence_bleus.items(), key=lambda x: x[0]):
-    #         display((f'BLEU{key}: {val}'))
 
     @lru_cache(maxsize=50)
     def displays_eval_metric(self, eval_method, eval_metric):
@@ -1066,12 +876,6 @@ class Evaluator(object):
             cands = self.inter_greedy_actions
         elif eval_method is EvalMethod.K_RANDOM:
             return self.displays_eval_metric_agent_k_random(eval_metric)
-        elif eval_method is EvalMethod.HUMAN:
-            return self.displays_eval_metric_human(eval_metric)
-        elif eval_method is EvalMethod.REACT:
-            return self.displays_eval_metric_react(eval_metric, with_react=True)
-        elif eval_method is EvalMethod.WITHOUT_REACT:
-            return self.displays_eval_metric_react(eval_metric, with_react=False)
         else:
             raise NotImplementedError
 
@@ -1132,97 +936,6 @@ class Evaluator(object):
             self.K,
             self.get_ith_k_random_agent_actions
         )
-
-    @lru_cache(maxsize=1)
-    def displays_eval_metric_human(self, eval_metric):
-        """
-
-        Returns: average of scores for each dataset
-
-        """
-
-        if self.schema_name is SchemaName.NETWORKING:
-            if EvalMetric.is_micro_eval_metric(eval_metric):
-                cands = []
-                for i in range(self.num_human_sessions_per_dataset):
-                    cand_i = self.get_ith_human_actions(i)
-                    cands.append(cand_i)
-
-                result = self.calculate_eval_metric_for_displays(
-                    self.refs_actions, cands, eval_metric,
-                    compressed_cand=False,
-                    filter_by_field_cand=False,
-                    continuous_filter_term_cand=False,
-                )
-
-            else:
-                eval_metric_values = defaultdict(list)
-
-                for i in range(self.num_human_sessions_per_dataset):
-                    cands = self.get_ith_human_actions(i)
-                    for key, val in self.calculate_eval_metric_for_displays(
-                            self.refs_actions, cands, eval_metric,
-                            compressed_cand=False,
-                            filter_by_field_cand=False,
-                            continuous_filter_term_cand=False,
-                    ).items():
-                        eval_metric_values[key].append(val)
-
-                # Calculate average
-                result = self.calculate_avg_eval_metric(eval_metric_values)
-
-        elif self.schema_name is SchemaName.FLIGHTS:
-            result = self.displays_eval_metric_multiple_sessions(
-                eval_metric,
-                self.num_human_sessions_per_dataset,
-                self.get_ith_human_actions
-            )
-
-        else:
-            raise NotImplementedError
-
-        return result
-
-    @lru_cache(maxsize=1)
-    def displays_eval_metric_react(self, eval_metric, with_react=True):
-        """
-
-        Returns: average of scores for each dataset
-
-        """
-        refs = [self.refs_actions[idx] for idx in [0, 3]]
-        if EvalMetric.is_micro_eval_metric(eval_metric):
-            cands = []
-            for i in range(self.num_react_sessions_per_dataset):
-                cand_i = self.get_ith_react_actions(i, with_react=with_react)
-                cands.append(cand_i)
-
-            result = self.calculate_eval_metric_for_displays(
-                refs, cands, eval_metric,
-                compressed_cand=False,
-                filter_by_field_cand=False,
-                continuous_filter_term_cand=False,
-                eval_method=EvalMethod.REACT
-
-            )
-        else:
-            eval_metric_values = defaultdict(list)
-
-            for i in range(self.num_react_sessions_per_dataset):
-                cands = self.get_ith_react_actions(i, with_react=with_react)
-                for key, val in self.calculate_eval_metric_for_displays(
-                        refs, cands, eval_metric,
-                        compressed_cand=False,
-                        filter_by_field_cand=False,
-                        continuous_filter_term_cand=False,
-                        eval_method=EvalMethod.REACT
-                ).items():
-                    eval_metric_values[key].append(val)
-
-            # Calculate average
-            result = self.calculate_avg_eval_metric(eval_metric_values)
-
-        return result
 
     def calculate_avg_eval_metric(self, eval_metric_values):
         result = dict()
@@ -1321,31 +1034,27 @@ class Evaluator(object):
         result = AllDatasetsTedResult()
         for dataset_num in range(self.D):
             refs, cand = references_actions[dataset_num], candidate_actions[dataset_num]
-            if eval_method is EvalMethod.REACT and not dataset_num in [0, 3]:
-                unnorm_ted_result = TedResult.get_empty_result(normalized=False)
-                norm_ted_result = TedResult.get_empty_result(normalized=True)
-            else:
-                # Unnormalized
-                min_ted, argmin_ref, teds_lst, min_ted_edit_operations = compute_minimum_display_TED_from_actions(
-                    refs, cand, dataset_number=dataset_num, normalize=False, return_min_ops=True,
-                    compressed_ref=compressed_ref,
-                    filter_by_field_ref=filter_by_field_ref,
-                    continuous_filter_term_ref=continuous_filter_term_ref,
-                    compressed_cand=compressed_cand,
-                    filter_by_field_cand=filter_by_field_cand,
-                    continuous_filter_term_cand=continuous_filter_term_cand
-                )
-                unnorm_ted_result = TedResult(min_ted, argmin_ref, teds_lst, min_ted_edit_operations, normalized=False)
-                min_ted, argmin_ref, teds_lst, min_ted_edit_operations = compute_minimum_display_TED_from_actions(
-                    refs, cand, dataset_number=dataset_num, normalize=True, return_min_ops=True,
-                    compressed_ref=compressed_ref,
-                    filter_by_field_ref=filter_by_field_ref,
-                    continuous_filter_term_ref=continuous_filter_term_ref,
-                    compressed_cand=compressed_cand,
-                    filter_by_field_cand=filter_by_field_cand,
-                    continuous_filter_term_cand=continuous_filter_term_cand
-                )
-                norm_ted_result = TedResult(min_ted, argmin_ref, teds_lst, min_ted_edit_operations, normalized=True)
+            # Unnormalized
+            min_ted, argmin_ref, teds_lst, min_ted_edit_operations = compute_minimum_display_TED_from_actions(
+                refs, cand, dataset_number=dataset_num, normalize=False, return_min_ops=True,
+                compressed_ref=compressed_ref,
+                filter_by_field_ref=filter_by_field_ref,
+                continuous_filter_term_ref=continuous_filter_term_ref,
+                compressed_cand=compressed_cand,
+                filter_by_field_cand=filter_by_field_cand,
+                continuous_filter_term_cand=continuous_filter_term_cand
+            )
+            unnorm_ted_result = TedResult(min_ted, argmin_ref, teds_lst, min_ted_edit_operations, normalized=False)
+            min_ted, argmin_ref, teds_lst, min_ted_edit_operations = compute_minimum_display_TED_from_actions(
+                refs, cand, dataset_number=dataset_num, normalize=True, return_min_ops=True,
+                compressed_ref=compressed_ref,
+                filter_by_field_ref=filter_by_field_ref,
+                continuous_filter_term_ref=continuous_filter_term_ref,
+                compressed_cand=compressed_cand,
+                filter_by_field_cand=filter_by_field_cand,
+                continuous_filter_term_cand=continuous_filter_term_cand
+            )
+            norm_ted_result = TedResult(min_ted, argmin_ref, teds_lst, min_ted_edit_operations, normalized=True)
 
             result.append(unnorm_ted_result)
             result.append(norm_ted_result)
@@ -1372,12 +1081,6 @@ class Evaluator(object):
             cands = self.inter_greedy_actions
         elif eval_method is EvalMethod.K_RANDOM:
             return self.displays_TED_agent_k_random()
-        elif eval_method is EvalMethod.HUMAN:
-            return self.displays_TED_human()
-        elif eval_method is EvalMethod.REACT:
-            return self.displays_TED_react(with_react=True)
-        elif eval_method is EvalMethod.WITHOUT_REACT:
-            return self.displays_TED_react(with_react=False)
         else:
             raise NotImplementedError
 
@@ -1402,66 +1105,6 @@ class Evaluator(object):
 
         return result
 
-    def displays_TED_human(self):
-        """
-
-        Returns: average of k scores for each dataset
-
-        """
-
-        all_datasets_ted_results = []
-
-        if self.schema_name is SchemaName.NETWORKING:
-            for i in range(self.num_human_sessions_per_dataset):
-                cands = self.get_ith_human_actions(i)
-                all_datasets_ted_result = self.calculate_TED_for_displays(
-                    self.refs_actions,
-                    cands,
-                    compressed_cand=False,
-                    filter_by_field_cand=False,
-                    continuous_filter_term_cand=False,
-                )
-                all_datasets_ted_results.append(all_datasets_ted_result)
-
-        elif self.schema_name is SchemaName.FLIGHTS:
-            for i in range(self.num_human_sessions_per_dataset):
-                cands = self.get_ith_human_actions(i)
-                all_datasets_ted_result = self.calculate_TED_for_displays(self.refs_actions, cands)
-                all_datasets_ted_results.append(all_datasets_ted_result)
-        else:
-            raise NotImplementedError
-
-        # Calculate average
-        result = self.calculate_avg_all_datasets_ted_results(all_datasets_ted_results)
-
-        return result
-
-    def displays_TED_react(self, with_react=True):
-        """
-
-        Returns: average of k scores for each dataset
-
-        """
-
-        all_datasets_ted_results = []
-
-        for i in range(self.num_react_sessions_per_dataset):
-            cands = self.get_ith_react_actions(i, with_react=with_react)
-            cands = [cands[0], None, None, cands[1]]
-            all_datasets_ted_result = self.calculate_TED_for_displays(
-                self.refs_actions,
-                cands,
-                compressed_cand=False,
-                filter_by_field_cand=False,
-                continuous_filter_term_cand=False,
-                eval_method=EvalMethod.REACT
-            )
-            all_datasets_ted_results.append(all_datasets_ted_result)
-
-        # Calculate average
-        result = self.calculate_avg_all_datasets_ted_results(all_datasets_ted_results)
-
-        return result
 
     def calculate_avg_all_datasets_ted_results(self, all_datasets_ted_results):
         result = AllDatasetsTedResult()
@@ -1591,10 +1234,6 @@ class Evaluator(object):
                             eval_method, eval_metric, dataset_num)
                         compare_data_elem = self.displays_eval_metric_for_dataset(
                             compare_eval_method, eval_metric, dataset_num)
-                    if ((eval_method in [EvalMethod.REACT, EvalMethod.WITHOUT_REACT] or
-                        compare_eval_method in [EvalMethod.REACT, EvalMethod.WITHOUT_REACT]) and
-                        dataset_num not in [0, 3]):
-                        continue
                     lst1.append(data_elem)
                     lst2.append(compare_data_elem)
 

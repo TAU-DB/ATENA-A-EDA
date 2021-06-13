@@ -19,7 +19,7 @@ import gym_atena.global_env_prop as gep
 
 
 
-training_dir_path = '/home/oribarel/GIT/ATENA/results/20190518T140227.935305'
+training_dir_path = None
 
 
 class TrainingActionsAnalyzer(object):
