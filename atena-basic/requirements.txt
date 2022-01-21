@@ -14,5 +14,5 @@ cached_property==1.5.2
 chainerrl==0.8.0
 seaborn==0.11.0
 cachetools==4.2.1
-ipython==7.20.1
+ipython==7.31.1
 tensorboardX==2.1
